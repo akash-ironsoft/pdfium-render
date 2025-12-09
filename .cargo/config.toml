@@ -1,0 +1,9 @@
+# Cargo configuration for custom Pdfium library
+
+[build]
+# Add library search path for linking
+rustflags = ["-L", "."]
+
+[env]
+# Set library path for runtime
+LD_LIBRARY_PATH = { value = ".:/home/akash/Dev/ironsoft/iron-universal/Universal.PdfEditor/pdfium-workspace/Universal.Pdfium/out/linux-x64-shared", force = true }
