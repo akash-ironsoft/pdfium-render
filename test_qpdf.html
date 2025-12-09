@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDFium + QPDF Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        .container {
+            border: 1px solid #ccc;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #output {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            max-height: 500px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .status.loading {
+            background-color: #fff3cd;
+            border: 1px solid #ffc107;
+        }
+        .status.success {
+            background-color: #d4edda;
+            border: 1px solid #28a745;
+        }
+        .status.error {
+            background-color: #f8d7da;
+            border: 1px solid #dc3545;
+        }
+    </style>
+</head>
+<body>
+    <h1>PDFium + QPDF Integration Test</h1>
+
+    <div id="status" class="status loading">Initializing PDFium WASM...</div>
+
+    <div class="container">
+        <h2>Select PDF File</h2>
+        <input type="file" id="pdfFile" accept=".pdf" disabled>
+        <p id="fileInfo"></p>
+    </div>
+
+    <div class="container">
+        <h2>Operations</h2>
+        <button id="extractTextBtn" disabled>Extract Text</button>
+        <button id="jsonV1Btn" disabled>Convert to JSON V1</button>
+        <button id="jsonV2Btn" disabled>Convert to JSON V2</button>
+        <button id="getInfoBtn" disabled>Get PDF Info</button>
+        <button id="clearBtn">Clear Output</button>
+    </div>
+
+    <div class="container">
+        <h2>Output</h2>
+        <div id="output">Waiting for PDFium to load...</div>
+    </div>
+
+    <script src="pdfium.js"></script>
+    <script>
+        let Module;
+        let FPDF = {};
+        let currentPdfBuffer = null;
+
+        // Initialize PDFium Module
+        async function initPDFium() {
+            try {
+                document.getElementById('status').textContent = 'Loading PDFium WASM module...';
+
+                // Load PDFium module
+                Module = await PDFiumModule();
+
+                document.getElementById('status').textContent = 'Initializing PDFium library...';
+
+                // Initialize PDFium library
+                const config = Module._malloc(20); // sizeof(FPDF_LIBRARY_CONFIG)
+                Module.HEAP32[config >> 2] = 2; // version
+                Module.ccall('FPDF_InitLibraryWithConfig', null, ['number'], [config]);
+                Module._free(config);
+
+                // Wrap PDFium functions
+                wrapPDFiumFunctions();
+
+                // Update UI
+                document.getElementById('status').className = 'status success';
+                document.getElementById('status').textContent = '✅ PDFium loaded successfully! Ready to process PDFs.';
+                document.getElementById('pdfFile').disabled = false;
+                document.getElementById('output').textContent = 'PDFium ready. Please select a PDF file.';
+
+                console.log('PDFium initialized successfully');
+            } catch (error) {
+                console.error('Failed to initialize PDFium:', error);
+                document.getElementById('status').className = 'status error';
+                document.getElementById('status').textContent = '❌ Failed to load PDFium: ' + error.message;
+                document.getElementById('output').textContent = 'Error: ' + error.message + '\n\nStack: ' + error.stack;
+            }
+        }
+
+        // Wrap PDFium functions using cwrap
+        function wrapPDFiumFunctions() {
+            // Core PDFium functions
+            FPDF.FPDF_LoadMemDocument = Module.cwrap('FPDF_LoadMemDocument', 'number', ['number', 'number', 'string']);
+            FPDF.FPDF_CloseDocument = Module.cwrap('FPDF_CloseDocument', null, ['number']);
+            FPDF.FPDF_GetPageCount = Module.cwrap('FPDF_GetPageCount', 'number', ['number']);
+            FPDF.FPDF_LoadPage = Module.cwrap('FPDF_LoadPage', 'number', ['number', 'number']);
+            FPDF.FPDF_ClosePage = Module.cwrap('FPDF_ClosePage', null, ['number']);
+            FPDF.FPDFPage_GetMediaBox = Module.cwrap('FPDFPage_GetMediaBox', 'number', ['number', 'number', 'number', 'number', 'number']);
+
+            // Text extraction functions
+            FPDF.FPDFText_LoadPage = Module.cwrap('FPDFText_LoadPage', 'number', ['number']);
+            FPDF.FPDFText_ClosePage = Module.cwrap('FPDFText_ClosePage', null, ['number']);
+            FPDF.FPDFText_CountChars = Module.cwrap('FPDFText_CountChars', 'number', ['number']);
+            FPDF.FPDFText_GetText = Module.cwrap('FPDFText_GetText', 'number', ['number', 'number', 'number', 'number']);
+
+            // QPDF functions
+            FPDF.IPDF_QPDF_PDFToJSON = Module.cwrap('IPDF_QPDF_PDFToJSON', 'number', ['number', 'number', 'number']);
+            FPDF.IPDF_QPDF_FreeString = Module.cwrap('IPDF_QPDF_FreeString', null, ['number']);
+
+            console.log('PDFium functions wrapped successfully');
+        }
+
+        // Extract text from PDF
+        function extractText() {
+            if (!currentPdfBuffer) {
+                alert('Please select a PDF file first');
+                return;
+            }
+
+            try {
+                document.getElementById('output').textContent = 'Extracting text...';
+
+                // Load PDF document
+                const wasmBuffer = Module._malloc(currentPdfBuffer.byteLength);
+                Module.HEAPU8.set(new Uint8Array(currentPdfBuffer), wasmBuffer);
+
+                const doc = FPDF.FPDF_LoadMemDocument(wasmBuffer, currentPdfBuffer.byteLength, null);
+                if (!doc) {
+                    throw new Error('Failed to load PDF document');
+                }
+
+                const pageCount = FPDF.FPDF_GetPageCount(doc);
+                let allText = `PDF has ${pageCount} page(s)\n\n`;
+
+                // Extract text from each page
+                for (let i = 0; i < pageCount; i++) {
+                    const page = FPDF.FPDF_LoadPage(doc, i);
+                    if (!page) {
+                        allText += `Page ${i + 1}: Failed to load\n\n`;
+                        continue;
+                    }
+
+                    const textPage = FPDF.FPDFText_LoadPage(page);
+                    if (!textPage) {
+                        FPDF.FPDF_ClosePage(page);
+                        allText += `Page ${i + 1}: No text layer\n\n`;
+                        continue;
+                    }
+
+                    const charCount = FPDF.FPDFText_CountChars(textPage);
+                    allText += `--- Page ${i + 1} (${charCount} characters) ---\n`;
+
+                    if (charCount > 0) {
+                        // Allocate buffer for text (UTF-16, so 2 bytes per char + null terminator)
+                        const textBufferSize = (charCount + 1) * 2;
+                        const textBuffer = Module._malloc(textBufferSize);
+
+                        const extracted = FPDF.FPDFText_GetText(textPage, 0, charCount, textBuffer);
+
+                        if (extracted > 0) {
+                            // Convert UTF-16LE to JavaScript string
+                            const textArray = new Uint16Array(Module.HEAPU8.buffer, textBuffer, charCount);
+                            const text = String.fromCharCode.apply(null, textArray);
+                            allText += text + '\n';
+                        }
+
+                        Module._free(textBuffer);
+                    } else {
+                        allText += '(No text found)\n';
+                    }
+
+                    allText += '\n';
+
+                    FPDF.FPDFText_ClosePage(textPage);
+                    FPDF.FPDF_ClosePage(page);
+                }
+
+                FPDF.FPDF_CloseDocument(doc);
+                Module._free(wasmBuffer);
+
+                document.getElementById('output').textContent = allText;
+            } catch (error) {
+                console.error('Text extraction error:', error);
+                document.getElementById('output').textContent = 'Error: ' + error.message + '\n\n' + error.stack;
+            }
+        }
+
+        // Convert PDF to QPDF JSON
+        function convertToJSON(version) {
+            if (!currentPdfBuffer) {
+                alert('Please select a PDF file first');
+                return;
+            }
+
+            try {
+                document.getElementById('output').textContent = `Converting to QPDF JSON v${version}...`;
+
+                // Allocate WASM memory for PDF data
+                const wasmBuffer = Module._malloc(currentPdfBuffer.byteLength);
+                Module.HEAPU8.set(new Uint8Array(currentPdfBuffer), wasmBuffer);
+
+                // Call QPDF function
+                const jsonPtr = FPDF.IPDF_QPDF_PDFToJSON(wasmBuffer, currentPdfBuffer.byteLength, version);
+
+                // Free PDF buffer
+                Module._free(wasmBuffer);
+
+                if (!jsonPtr) {
+                    throw new Error('QPDF conversion returned null pointer');
+                }
+
+                // Convert C string to JavaScript string
+                const jsonString = Module.UTF8ToString(jsonPtr);
+
+                // Free the JSON string
+                FPDF.IPDF_QPDF_FreeString(jsonPtr);
+
+                // Parse and pretty-print JSON
+                const jsonObj = JSON.parse(jsonString);
+                const prettyJson = JSON.stringify(jsonObj, null, 2);
+
+                document.getElementById('output').textContent = prettyJson;
+
+                console.log('QPDF conversion successful, JSON length:', jsonString.length);
+            } catch (error) {
+                console.error('QPDF conversion error:', error);
+                document.getElementById('output').textContent = 'Error: ' + error.message + '\n\n' + error.stack;
+            }
+        }
+
+        // Get PDF info
+        function getPDFInfo() {
+            if (!currentPdfBuffer) {
+                alert('Please select a PDF file first');
+                return;
+            }
+
+            try {
+                const wasmBuffer = Module._malloc(currentPdfBuffer.byteLength);
+                Module.HEAPU8.set(new Uint8Array(currentPdfBuffer), wasmBuffer);
+
+                const doc = FPDF.FPDF_LoadMemDocument(wasmBuffer, currentPdfBuffer.byteLength, null);
+                if (!doc) {
+                    throw new Error('Failed to load PDF document');
+                }
+
+                const pageCount = FPDF.FPDF_GetPageCount(doc);
+                let info = `PDF Information\n${'='.repeat(50)}\n\n`;
+                info += `Number of pages: ${pageCount}\n`;
+                info += `File size: ${(currentPdfBuffer.byteLength / 1024).toFixed(2)} KB\n\n`;
+
+                // Get info for each page
+                for (let i = 0; i < Math.min(pageCount, 10); i++) {
+                    const page = FPDF.FPDF_LoadPage(doc, i);
+                    if (page) {
+                        const left = Module._malloc(8);
+                        const bottom = Module._malloc(8);
+                        const right = Module._malloc(8);
+                        const top = Module._malloc(8);
+
+                        const result = FPDF.FPDFPage_GetMediaBox(page, left, bottom, right, top);
+
+                        if (result) {
+                            const width = Module.HEAPF32[right >> 2] - Module.HEAPF32[left >> 2];
+                            const height = Module.HEAPF32[top >> 2] - Module.HEAPF32[bottom >> 2];
+                            info += `Page ${i + 1}: ${width.toFixed(2)} x ${height.toFixed(2)} points\n`;
+                        }
+
+                        Module._free(left);
+                        Module._free(bottom);
+                        Module._free(right);
+                        Module._free(top);
+
+                        FPDF.FPDF_ClosePage(page);
+                    }
+                }
+
+                if (pageCount > 10) {
+                    info += `... (${pageCount - 10} more pages)\n`;
+                }
+
+                FPDF.FPDF_CloseDocument(doc);
+                Module._free(wasmBuffer);
+
+                document.getElementById('output').textContent = info;
+            } catch (error) {
+                console.error('Error getting PDF info:', error);
+                document.getElementById('output').textContent = 'Error: ' + error.message;
+            }
+        }
+
+        // File selection handler
+        document.getElementById('pdfFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                currentPdfBuffer = e.target.result;
+                document.getElementById('fileInfo').textContent = `Selected: ${file.name} (${(file.size / 1024).toFixed(2)} KB)`;
+                document.getElementById('extractTextBtn').disabled = false;
+                document.getElementById('jsonV1Btn').disabled = false;
+                document.getElementById('jsonV2Btn').disabled = false;
+                document.getElementById('getInfoBtn').disabled = false;
+                document.getElementById('output').textContent = 'PDF loaded. Click a button to perform an operation.';
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        // Button handlers
+        document.getElementById('extractTextBtn').addEventListener('click', extractText);
+        document.getElementById('jsonV1Btn').addEventListener('click', () => convertToJSON(1));
+        document.getElementById('jsonV2Btn').addEventListener('click', () => convertToJSON(2));
+        document.getElementById('getInfoBtn').addEventListener('click', getPDFInfo);
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            document.getElementById('output').textContent = 'Output cleared.';
+        });
+
+        // Initialize on page load
+        window.addEventListener('load', initPDFium);
+    </script>
+</body>
+</html>

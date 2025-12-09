@@ -9799,3 +9799,6 @@ mod tests {
         Ok(())
     }
 }
+
+// QPDF integration
+pub mod qpdf;

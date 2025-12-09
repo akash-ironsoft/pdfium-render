@@ -234,6 +234,15 @@ pub enum PdfiumError {
 
     /// A wrapped internal library error from Pdfium's `FPDF_ERR_*` constant values.
     PdfiumLibraryInternalError(PdfiumInternalError),
+    
+    /// QPDF conversion to JSON failed.
+    QpdfConversionFailed,
+
+    /// A null pointer was encountered where a valid pointer was expected.
+    NullPointer,
+
+    /// Invalid UTF-8 was encountered when converting a C string to a Rust string.
+    InvalidUtf8,
 }
 
 impl Display for PdfiumError {

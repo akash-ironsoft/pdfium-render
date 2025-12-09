@@ -85,6 +85,7 @@ mod error;
 mod pdf;
 mod pdfium;
 mod utils;
+mod qpdf;
 
 /// A prelude for conveniently importing all public `pdfium-render` definitions at once.
 ///
@@ -190,6 +191,7 @@ pub mod prelude {
         pdf::quad_points::*,
         pdf::rect::*,
         pdfium::*,
+        qpdf::{QpdfJson, QpdfJsonVersion},
     };
 }
 
