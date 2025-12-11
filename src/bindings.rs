@@ -9781,6 +9781,36 @@ pub trait PdfiumLibraryBindings: Send + Sync + Drop {
     /// Returns `true` on success.
     #[allow(non_snake_case)]
     fn FPDFCatalog_SetLanguage(&self, document: FPDF_DOCUMENT, language: &str) -> FPDF_BOOL;
+
+    // ===== QPDF Integration Functions =====
+
+    /// Converts a PDF document to QPDF JSON format.
+    ///
+    /// Function: IPDF_QPDF_PDFToJSON
+    ///          Convert a PDF document to QPDF JSON format.
+    ///
+    /// Parameters:
+    ///          pdf_data    -   Slice containing the PDF file data in memory.
+    ///          version     -   QPDF JSON version (1 or 2).
+    ///                          Version 1: Basic JSON structure
+    ///                          Version 2: Extended JSON with more details
+    ///
+    /// Return value:
+    ///          A String containing the JSON data, or None if the conversion fails.
+    ///
+    /// Comments:
+    ///          The JSON format follows QPDF's JSON specification:
+    ///          - Version 1: Basic structure with objects and streams
+    ///          - Version 2: Enhanced with encryption info, object streams, etc.
+    ///
+    /// Error handling:
+    ///          Returns None on error. Possible causes:
+    ///          - Invalid PDF data
+    ///          - Insufficient memory
+    ///          - QPDF processing error
+    ///          - Invalid version parameter
+    #[allow(non_snake_case)]
+    fn IPDF_QPDF_PDFToJSON(&self, pdf_data: &[u8], version: c_int) -> Option<String>;
 }
 
 #[cfg(test)]

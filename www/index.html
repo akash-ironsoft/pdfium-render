@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pdfium WASM Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #f8f9fa;
+        }
+
+        .upload-area:hover {
+            border-color: #764ba2;
+            background: #e9ecef;
+        }
+
+        .upload-area.dragover {
+            border-color: #28a745;
+            background: #d4edda;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            margin: 5px;
+            transition: transform 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .output {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 20px;
+            margin-top: 20px;
+            max-height: 500px;
+            overflow-y: auto;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .metadata {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .metadata-item {
+            background: #e9ecef;
+            padding: 12px;
+            border-radius: 6px;
+        }
+
+        .metadata-item strong {
+            color: #667eea;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .status {
+            padding: 10px;
+            border-radius: 6px;
+            margin: 10px 0;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .button-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+            display: none;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .feature-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Pdfium WASM Demo</h1>
+
+        <div class="card">
+            <h2>📁 Upload PDF <span class="feature-badge">Pdfium WASM</span></h2>
+            <div class="upload-area" id="uploadArea">
+                <h3>📤 Drop PDF file here or click to upload</h3>
+                <p style="color: #6c757d; margin-top: 10px;">Supports PDF files of any size</p>
+                <input type="file" id="fileInput" accept=".pdf">
+            </div>
+            <div id="status"></div>
+        </div>
+
+        <div class="card" id="actionsCard" style="display: none;">
+            <h2>⚡ Actions</h2>
+            <p style="color: #6c757d; margin-bottom: 15px; font-size: 14px;">
+                📝 <strong>Note:</strong> QPDF PDF-to-JSON conversion is not yet available in WASM builds.
+                Use the native Linux/Mac/Windows version for full QPDF functionality.
+            </p>
+            <div class="button-group">
+                <button onclick="getMetadata()">📊 Get Metadata</button>
+                <button onclick="extractText()">📝 Extract All Text</button>
+                <button onclick="extractPage()">📄 Extract Page 1 Text</button>
+                <button onclick="convertToJson()" style="opacity: 0.5;" disabled>🔄 Convert to JSON (QPDF) [Coming Soon]</button>
+                <button onclick="downloadJson()" style="opacity: 0.5;" disabled>💾 Download JSON [Coming Soon]</button>
+            </div>
+            <div class="spinner" id="spinner"></div>
+        </div>
+
+        <div class="card" id="outputCard" style="display: none;">
+            <h2>📋 Output</h2>
+            <div id="output" class="output"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import init, { PdfProcessor } from './pkg/pdfium_render.js';
+
+        let processor = null;
+        let currentPdfBytes = null;
+        let currentJsonOutput = null;
+
+        // Initialize WASM
+        async function initWasm() {
+            try {
+                await init();
+
+                // NOTE: Pdfium WASM requires an external Pdfium WASM module to be loaded.
+                // For demonstration purposes, we're showing the UI, but full functionality
+                // requires building and loading a separate Pdfium WASM module.
+                // See: https://github.com/ajrcarey/pdfium-render/blob/master/examples/index.html
+
+                showStatus('⚠️ WASM Module loaded, but Pdfium library not configured. This is a UI demo only.', 'info');
+                console.log('Note: Pdfium WASM requires external Pdfium WASM module');
+                console.log('Full functionality requires: (1) Build Pdfium as WASM, (2) Call initialize_pdfium_render()');
+
+                // Uncomment when Pdfium WASM module is available:
+                // processor = new PdfProcessor();
+                // showStatus('✅ WASM Module Loaded Successfully', 'success');
+            } catch (error) {
+                showStatus('❌ Failed to initialize WASM: ' + error.message, 'error');
+                console.error('WASM initialization error:', error);
+            }
+        }
+
+        // Show status message
+        function showStatus(message, type = 'info') {
+            const statusEl = document.getElementById('status');
+            statusEl.className = `status ${type}`;
+            statusEl.textContent = message;
+            statusEl.style.display = 'block';
+        }
+
+        // Show spinner
+        function showSpinner(show) {
+            document.getElementById('spinner').style.display = show ? 'block' : 'none';
+        }
+
+        // Handle file upload
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+
+        uploadArea.onclick = () => fileInput.click();
+
+        uploadArea.ondragover = (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        };
+
+        uploadArea.ondragleave = () => {
+            uploadArea.classList.remove('dragover');
+        };
+
+        uploadArea.ondrop = (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                handleFile(e.dataTransfer.files[0]);
+            }
+        };
+
+        fileInput.onchange = (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        };
+
+        async function handleFile(file) {
+            if (!file.name.toLowerCase().endsWith('.pdf')) {
+                showStatus('❌ Please select a PDF file', 'error');
+                return;
+            }
+
+            showStatus(`📖 Reading: ${file.name}`, 'info');
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                currentPdfBytes = new Uint8Array(arrayBuffer);
+
+                // Quick test - get page count
+                const pageCount = processor.getPageCount(currentPdfBytes);
+
+                showStatus(`✅ PDF Loaded: ${file.name} (${pageCount} pages, ${(file.size / 1024).toFixed(2)} KB)`, 'success');
+                document.getElementById('actionsCard').style.display = 'block';
+            } catch (error) {
+                showStatus('❌ Error loading PDF: ' + error.message, 'error');
+                console.error('PDF load error:', error);
+            }
+        }
+
+        // Expose functions to global scope
+        window.getMetadata = async function() {
+            if (!currentPdfBytes) return;
+
+            showSpinner(true);
+            try {
+                const metadata = processor.getMetadata(currentPdfBytes);
+
+                let html = '<div class="metadata">';
+                for (const [key, value] of Object.entries(metadata)) {
+                    html += `<div class="metadata-item"><strong>${key}</strong>${value || 'N/A'}</div>`;
+                }
+                html += '</div>';
+
+                showOutput(html);
+                showStatus('✅ Metadata extracted', 'success');
+            } catch (error) {
+                showStatus('❌ Error: ' + error.message, 'error');
+            } finally {
+                showSpinner(false);
+            }
+        };
+
+        window.extractText = async function() {
+            if (!currentPdfBytes) return;
+
+            showSpinner(true);
+            showStatus('📝 Extracting text from all pages...', 'info');
+
+            try {
+                const text = processor.extractText(currentPdfBytes);
+                showOutput(text);
+                showStatus(`✅ Extracted ${text.length} characters`, 'success');
+            } catch (error) {
+                showStatus('❌ Error: ' + error.message, 'error');
+            } finally {
+                showSpinner(false);
+            }
+        };
+
+        window.extractPage = async function() {
+            if (!currentPdfBytes) return;
+
+            showSpinner(true);
+            try {
+                const text = processor.extractPageText(currentPdfBytes, 0);
+                showOutput(text);
+                showStatus('✅ Extracted text from page 1', 'success');
+            } catch (error) {
+                showStatus('❌ Error: ' + error.message, 'error');
+            } finally {
+                showSpinner(false);
+            }
+        };
+
+        window.convertToJson = async function() {
+            if (!currentPdfBytes) return;
+
+            showSpinner(true);
+            showStatus('🔄 Converting PDF to QPDF JSON (this may take a moment)...', 'info');
+
+            try {
+                currentJsonOutput = processor.pdfToJson(currentPdfBytes, 2);
+
+                // Try to parse and pretty print
+                try {
+                    const parsed = JSON.parse(currentJsonOutput);
+                    const preview = JSON.stringify(parsed, null, 2).substring(0, 5000);
+                    showOutput(preview + '\n\n... (JSON truncated for display. Click "Download JSON" for full output)');
+                } catch {
+                    showOutput(currentJsonOutput.substring(0, 5000) + '\n\n... (truncated)');
+                }
+
+                showStatus(`✅ Converted to JSON (${(currentJsonOutput.length / 1024).toFixed(2)} KB)`, 'success');
+            } catch (error) {
+                showStatus('❌ Error: ' + error.message, 'error');
+            } finally {
+                showSpinner(false);
+            }
+        };
+
+        window.downloadJson = function() {
+            if (!currentJsonOutput) {
+                showStatus('⚠ Please convert to JSON first', 'error');
+                return;
+            }
+
+            const blob = new Blob([currentJsonOutput], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'pdf-qpdf-output.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            showStatus('✅ JSON downloaded', 'success');
+        };
+
+        function showOutput(content) {
+            const outputCard = document.getElementById('outputCard');
+            const output = document.getElementById('output');
+            output.innerHTML = content;
+            outputCard.style.display = 'block';
+            outputCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        // Initialize on page load
+        initWasm();
+    </script>
+</body>
+</html>

@@ -2410,6 +2410,14 @@ pub(crate) struct DynamicPdfiumBindings {
     ))]
     extern_FPDFCatalog_SetLanguage:
         unsafe extern "C" fn(document: FPDF_DOCUMENT, language: FPDF_BYTESTRING) -> FPDF_BOOL,
+
+    // QPDF Integration
+    extern_IPDF_QPDF_PDFToJSON: unsafe extern "C" fn(
+        pdf_data: *const c_void,
+        pdf_size: size_t,
+        version: c_int,
+    ) -> *mut c_char,
+    extern_IPDF_QPDF_FreeString: unsafe extern "C" fn(str: *mut c_char),
 }
 
 impl DynamicPdfiumBindings {
@@ -3686,6 +3694,10 @@ impl DynamicPdfiumBindings {
                 feature = "pdfium_6666"
             ))]
             extern_FPDFCatalog_SetLanguage: *(Self::bind(&library, "FPDFCatalog_SetLanguage")?),
+
+            // QPDF Integration
+            extern_IPDF_QPDF_PDFToJSON: *(Self::bind(&library, "IPDF_QPDF_PDFToJSON")?),
+            extern_IPDF_QPDF_FreeString: *(Self::bind(&library, "IPDF_QPDF_FreeString")?),
             library,
         })
     }
@@ -9012,6 +9024,31 @@ impl PdfiumLibraryBindings for DynamicPdfiumBindings {
         let c_language = CString::new(language).unwrap();
 
         unsafe { (self.extern_FPDFCatalog_SetLanguage)(document, c_language.as_ptr()) }
+    }
+
+    #[inline]
+    #[allow(non_snake_case)]
+    fn IPDF_QPDF_PDFToJSON(&self, pdf_data: &[u8], version: c_int) -> Option<String> {
+        let json_ptr = unsafe {
+            (self.extern_IPDF_QPDF_PDFToJSON)(
+                pdf_data.as_ptr() as *const c_void,
+                pdf_data.len() as size_t,
+                version,
+            )
+        };
+
+        if json_ptr.is_null() {
+            return None;
+        }
+
+        // Convert C string to Rust String
+        let c_str = unsafe { std::ffi::CStr::from_ptr(json_ptr) };
+        let json_string = c_str.to_string_lossy().to_string();
+
+        // Free the string
+        unsafe { (self.extern_IPDF_QPDF_FreeString)(json_ptr) };
+
+        Some(json_string)
     }
 }
 

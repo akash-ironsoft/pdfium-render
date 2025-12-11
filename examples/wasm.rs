@@ -7,16 +7,36 @@ use wasm_bindgen::prelude::*;
 #[cfg(target_arch = "wasm32")]
 use web_sys::ImageData;
 
+#[cfg(target_arch = "wasm32")]
+use std::sync::atomic::{AtomicBool, Ordering};
+
 // See https://github.com/ajrcarey/pdfium-render/tree/master/examples for information
 // on how to build and package this example alongside a WASM build of Pdfium, suitable
 // for running in a browser.
+
+#[cfg(target_arch = "wasm32")]
+static PDFIUM_INITIALIZED: AtomicBool = AtomicBool::new(false);
+
+/// Helper function to get a Pdfium instance.
+/// First call initializes BINDINGS, subsequent calls reuse it.
+#[cfg(target_arch = "wasm32")]
+fn get_pdfium() -> Pdfium {
+    if PDFIUM_INITIALIZED.load(Ordering::Relaxed) {
+        // Already initialized, just return empty struct to reuse existing BINDINGS
+        Pdfium {}
+    } else {
+        // First call - initialize BINDINGS
+        PDFIUM_INITIALIZED.store(true, Ordering::Relaxed);
+        Pdfium::default()
+    }
+}
 
 /// Downloads the given URL, opens it as a PDF document, then logs the width and height of
 /// each page in the document, along with other document metrics, to the Javascript console.
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn log_page_metrics_to_console(url: String) {
-    let pdfium = Pdfium::default();
+    let pdfium = get_pdfium();
 
     let document = pdfium.load_pdf_from_fetch(url, None).await.unwrap();
 
@@ -121,7 +141,7 @@ pub async fn get_image_data_for_page(
     width: Pixels,
     height: Pixels,
 ) -> ImageData {
-    Pdfium::default()
+    get_pdfium()
         .load_pdf_from_fetch(url, None)
         .await
         .unwrap()
@@ -138,6 +158,56 @@ pub async fn get_image_data_for_page(
         .unwrap()
         .as_image_data()
         .unwrap()
+}
+
+/// Extracts all text from a PDF document and returns it as a single string.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub async fn extract_text_from_pdf(url: String) -> Result<String, JsValue> {
+    let pdfium = get_pdfium();
+
+    let document = pdfium
+        .load_pdf_from_fetch(url, None)
+        .await
+        .map_err(|e| JsValue::from_str(&format!("Failed to load PDF: {:?}", e)))?;
+
+    let mut all_text = String::new();
+
+    for (index, page) in document.pages().iter().enumerate() {
+        all_text.push_str(&format!("\n=== Page {} ===\n", index + 1));
+
+        let text = page
+            .text()
+            .map_err(|e| JsValue::from_str(&format!("Failed to get text: {:?}", e)))?
+            .all();
+
+        all_text.push_str(&text);
+        all_text.push('\n');
+    }
+
+    Ok(all_text)
+}
+
+/// Converts a PDF document to QPDF JSON format using the integrated QPDF library.
+///
+/// This function demonstrates the high-level API provided by pdfium-render for
+/// QPDF integration. All the complexity of calling the C functions is handled
+/// internally by the library.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub async fn pdf_to_qpdf_json(url: String, version: i32) -> Result<String, JsValue> {
+    let pdfium = get_pdfium();
+
+    // Load the PDF document
+    let document = pdfium
+        .load_pdf_from_fetch(url, None)
+        .await
+        .map_err(|e| JsValue::from_str(&format!("Failed to load PDF: {:?}", e)))?;
+
+    // Use the high-level API to convert to QPDF JSON
+    document
+        .to_qpdf_json(version)
+        .map_err(|e| JsValue::from_str(&format!("QPDF conversion failed: {:?}", e)))
 }
 
 // Source files in examples/ directory are expected to always have a main() entry-point.

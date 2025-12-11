@@ -5411,6 +5411,31 @@ impl PdfiumLibraryBindings for StaticPdfiumBindings {
 
         unsafe { crate::bindgen::FPDFCatalog_SetLanguage(document, c_language.as_ptr()) }
     }
+
+    #[inline]
+    #[allow(non_snake_case)]
+    fn IPDF_QPDF_PDFToJSON(&self, pdf_data: &[u8], version: c_int) -> Option<String> {
+        let json_ptr = unsafe {
+            crate::bindgen::IPDF_QPDF_PDFToJSON(
+                pdf_data.as_ptr() as *const c_void,
+                pdf_data.len(),
+                version,
+            )
+        };
+
+        if json_ptr.is_null() {
+            return None;
+        }
+
+        // Convert C string to Rust String
+        let c_str = unsafe { std::ffi::CStr::from_ptr(json_ptr) };
+        let json_string = c_str.to_string_lossy().to_string();
+
+        // Free the string
+        unsafe { crate::bindgen::IPDF_QPDF_FreeString(json_ptr) };
+
+        Some(json_string)
+    }
 }
 
 impl Drop for StaticPdfiumBindings {

@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Direct Pdfium WASM Demo (No Rust)</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .status {
+            padding: 10px;
+            border-radius: 6px;
+            margin: 10px 0;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            margin: 5px;
+            transition: transform 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #f8f9fa;
+        }
+
+        .upload-area:hover {
+            border-color: #764ba2;
+            background: #e9ecef;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .output {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 20px;
+            margin-top: 20px;
+            max-height: 500px;
+            overflow-y: auto;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        canvas {
+            max-width: 100%;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            margin-top: 15px;
+        }
+
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .comparison-box {
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 6px;
+        }
+
+        .comparison-box h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .comparison-box pre {
+            background: white;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+
+        @media (max-width: 768px) {
+            .comparison {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Direct Pdfium WASM Demo</h1>
+        <h2 style="color: white; text-align: center; margin-top: -20px; margin-bottom: 30px;">
+            Using Your Emscripten-Built Pdfium Directly (No Rust Layer)
+        </h2>
+
+        <div class="card">
+            <h2>📖 About This Demo</h2>
+            <p style="margin-bottom: 15px;">
+                This demonstrates <strong>direct JavaScript access</strong> to your Emscripten-built Pdfium WASM module,
+                <strong>without</strong> the pdfium-render Rust wrapper.
+            </p>
+
+            <div class="comparison">
+                <div class="comparison-box">
+                    <h3>✅ Direct Pdfium WASM (This Page)</h3>
+                    <pre>// JavaScript → C API
+const doc = Module._FPDF_LoadDocument(...);
+const count = Module._FPDF_GetPageCount(doc);
+const page = Module._FPDF_LoadPage(doc, 0);</pre>
+                    <p style="margin-top: 10px; font-size: 14px;">
+                        <strong>Pros:</strong> Direct, no middleman, you already have it<br>
+                        <strong>Cons:</strong> Low-level C API, manual memory management
+                    </p>
+                </div>
+
+                <div class="comparison-box">
+                    <h3>⚙️ pdfium-render (Rust Wrapper)</h3>
+                    <pre>// Rust → JavaScript → C API
+let doc = pdfium.load_pdf(...)?;
+let count = doc.pages().len();
+for page in doc.pages().iter() {...}</pre>
+                    <p style="margin-top: 10px; font-size: 14px;">
+                        <strong>Pros:</strong> High-level API, type safety, auto cleanup<br>
+                        <strong>Cons:</strong> Extra layer, complex setup
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>📁 Upload PDF</h2>
+            <div class="upload-area" id="uploadArea">
+                <h3>📤 Drop PDF file here or click to upload</h3>
+                <input type="file" id="fileInput" accept=".pdf">
+            </div>
+            <div id="status"></div>
+        </div>
+
+        <div class="card" id="actionsCard" style="display: none;">
+            <h2>⚡ Actions (Direct Pdfium C API)</h2>
+            <button onclick="getPageCount()">📊 Get Page Count</button>
+            <button onclick="renderFirstPage()">🖼️ Render First Page</button>
+            <button onclick="extractText()">📝 Extract Text (if available)</button>
+
+            <div id="output" style="display: none;"></div>
+            <canvas id="canvas" style="display: none;"></canvas>
+        </div>
+
+        <div class="card">
+            <h2>⚠️ Current Status</h2>
+            <div class="status info">
+                <strong>Setup Required:</strong> This demo needs your Emscripten-built Pdfium module.
+            </div>
+            <p style="margin-top: 15px;">
+                <strong>To use this:</strong>
+            </p>
+            <ol style="margin-left: 20px; margin-top: 10px;">
+                <li>Your Pdfium is at: <code>/home/akash/.../emscripten-wasm-release/</code></li>
+                <li>Need to copy <code>pdfium.js</code> and <code>pdfium.wasm</code> to this directory</li>
+                <li>Load them via <code>&lt;script src="pdfium.js"&gt;&lt;/script&gt;</code></li>
+                <li>Call Pdfium functions directly from JavaScript</li>
+            </ol>
+
+            <p style="margin-top: 15px; padding: 15px; background: #fff3cd; border-radius: 6px;">
+                <strong>💡 Bottom Line:</strong> If you're comfortable with JavaScript and C APIs,
+                you <strong>don't need pdfium-render</strong>. Just use your Emscripten-built Pdfium directly!
+            </p>
+        </div>
+    </div>
+
+    <script>
+        let pdfiumModule = null;
+        let currentPdfDoc = null;
+        let currentPdfBytes = null;
+
+        // This would work if we had the Pdfium WASM module loaded
+        // For example, if you have pdfium.js from your Emscripten build:
+
+        /*
+        Module.onRuntimeInitialized = () => {
+            pdfiumModule = Module;
+            showStatus('✅ Pdfium WASM loaded successfully!', 'success');
+            console.log('Pdfium ready. Available functions:', Object.keys(Module).filter(k => k.startsWith('_FPDF')));
+        };
+        */
+
+        // Show status message
+        function showStatus(message, type = 'info') {
+            const statusEl = document.getElementById('status');
+            statusEl.className = `status ${type}`;
+            statusEl.textContent = message;
+            statusEl.style.display = 'block';
+        }
+
+        // Handle file upload
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+
+        uploadArea.onclick = () => fileInput.click();
+
+        fileInput.onchange = (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        };
+
+        async function handleFile(file) {
+            if (!file.name.toLowerCase().endsWith('.pdf')) {
+                showStatus('❌ Please select a PDF file', 'error');
+                return;
+            }
+
+            showStatus(`📖 Reading: ${file.name}`, 'info');
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                currentPdfBytes = new Uint8Array(arrayBuffer);
+
+                showStatus(`✅ PDF Loaded: ${file.name} (${(file.size / 1024).toFixed(2)} KB)`, 'success');
+                document.getElementById('actionsCard').style.display = 'block';
+            } catch (error) {
+                showStatus('❌ Error loading PDF: ' + error.message, 'error');
+            }
+        }
+
+        function getPageCount() {
+            showStatus('⚠️ Pdfium module not loaded. See setup instructions below.', 'info');
+
+            // This is how you would call it if Pdfium was loaded:
+            const exampleCode = `
+// Example with loaded Pdfium:
+const ptr = pdfiumModule._malloc(currentPdfBytes.length);
+pdfiumModule.HEAPU8.set(currentPdfBytes, ptr);
+
+const doc = pdfiumModule._FPDF_LoadMemDocument(ptr, currentPdfBytes.length, null);
+const pageCount = pdfiumModule._FPDF_GetPageCount(doc);
+
+console.log('Page count:', pageCount);
+
+pdfiumModule._FPDF_CloseDocument(doc);
+pdfiumModule._free(ptr);
+            `;
+
+            const output = document.getElementById('output');
+            output.style.display = 'block';
+            output.textContent = 'Example code to call Pdfium directly:\n' + exampleCode;
+        }
+
+        function renderFirstPage() {
+            showStatus('⚠️ Pdfium module not loaded. See setup instructions below.', 'info');
+        }
+
+        function extractText() {
+            showStatus('⚠️ Pdfium module not loaded. See setup instructions below.', 'info');
+        }
+
+        // On page load
+        showStatus('⚠️ Pdfium WASM module not loaded. See setup instructions below.', 'info');
+    </script>
+</body>
+</html>
