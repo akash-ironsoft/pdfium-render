@@ -391,6 +391,39 @@ impl<'a> PdfDocument<'a> {
 
         Ok(blob)
     }
+
+    /// Converts this [PdfDocument] to QPDF JSON format.
+    ///
+    /// QPDF JSON is a comprehensive representation of the internal structure of a PDF document,
+    /// including all objects, streams, and metadata.
+    ///
+    /// # Arguments
+    ///
+    /// * `version` - The QPDF JSON version to use:
+    ///   - Version 1: Basic JSON structure with objects and streams
+    ///   - Version 2: Extended JSON with encryption info, object streams, and more details
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` containing:
+    /// - `Ok(String)` - The JSON representation of the document
+    /// - `Err(PdfiumError)` - If the conversion fails
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let json = document.to_qpdf_json(2)?;
+    /// println!("{}", json);
+    /// ```
+    pub fn to_qpdf_json(&self, version: i32) -> Result<String, PdfiumError> {
+        // Save document to bytes
+        let pdf_bytes = self.save_to_bytes()?;
+
+        // Call the QPDF binding
+        self.bindings()
+            .IPDF_QPDF_PDFToJSON(&pdf_bytes, version)
+            .ok_or(PdfiumError::QPDFConversionFailed)
+    }
 }
 
 impl<'a> Drop for PdfDocument<'a> {

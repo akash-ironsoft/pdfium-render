@@ -234,6 +234,14 @@ pub enum PdfiumError {
 
     /// A wrapped internal library error from Pdfium's `FPDF_ERR_*` constant values.
     PdfiumLibraryInternalError(PdfiumInternalError),
+
+    /// QPDF JSON conversion failed. This error occurs when the integrated QPDF library
+    /// is unable to convert the PDF document to JSON format. Possible causes include:
+    /// - Invalid or corrupted PDF data
+    /// - Insufficient memory
+    /// - Unsupported PDF features
+    /// - Invalid version parameter (must be 1 or 2)
+    QPDFConversionFailed,
 }
 
 impl Display for PdfiumError {

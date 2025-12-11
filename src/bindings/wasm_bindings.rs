@@ -17819,6 +17819,75 @@ impl PdfiumLibraryBindings for WasmPdfiumBindings {
 
         result
     }
+
+    #[allow(non_snake_case)]
+    fn IPDF_QPDF_PDFToJSON(&self, pdf_data: &[u8], version: c_int) -> Option<String> {
+        log::debug!("pdfium-render::PdfiumLibraryBindings::IPDF_QPDF_PDFToJSON(): entering");
+
+        let state = PdfiumRenderWasmState::lock_mut();
+
+        // Copy PDF data to WASM memory
+        let pdf_ptr = state.copy_bytes_to_pdfium(pdf_data);
+        let pdf_size = pdf_data.len();
+
+        // Call IPDF_QPDF_PDFToJSON
+        let json_ptr = state
+            .call(
+                "IPDF_QPDF_PDFToJSON",
+                JsFunctionArgumentType::Pointer,
+                Some(vec![
+                    JsFunctionArgumentType::Pointer,
+                    JsFunctionArgumentType::Number,
+                    JsFunctionArgumentType::Number,
+                ]),
+                Some(&JsValue::from(Array::of3(
+                    &Self::js_value_from_offset(pdf_ptr),
+                    &Self::js_value_from_offset(pdf_size),
+                    &JsValue::from(version),
+                ))),
+            )
+            .as_f64()
+            .unwrap() as usize;
+
+        // Free the PDF data
+        state.free(pdf_ptr);
+
+        if json_ptr == 0 {
+            log::error!("pdfium-render::PdfiumLibraryBindings::IPDF_QPDF_PDFToJSON(): QPDF returned NULL");
+            return None;
+        }
+
+        // Read the JSON string from WASM memory
+        // Find the null terminator to determine string length
+        let memory = state.heap_u8();
+        let mut len = 0;
+        loop {
+            if memory.get_index((json_ptr + len) as u32) == 0 {
+                break;
+            }
+            len += 1;
+        }
+
+        // Read the string bytes
+        let string_bytes = memory.subarray(json_ptr as u32, (json_ptr + len) as u32);
+        let mut bytes = vec![0u8; len];
+        string_bytes.copy_to(&mut bytes);
+
+        // Convert to Rust String
+        let json_string = String::from_utf8_lossy(&bytes).to_string();
+
+        // Free the JSON string using IPDF_QPDF_FreeString
+        state.call(
+            "IPDF_QPDF_FreeString",
+            JsFunctionArgumentType::Void,
+            Some(vec![JsFunctionArgumentType::Pointer]),
+            Some(&JsValue::from(Array::of1(&Self::js_value_from_offset(
+                json_ptr,
+            )))),
+        );
+
+        Some(json_string)
+    }
 }
 
 impl Drop for WasmPdfiumBindings {

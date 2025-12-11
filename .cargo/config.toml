@@ -1,0 +1,9 @@
+# Cargo configuration for custom Pdfium library
+
+# Apply these flags only to native Linux x64 builds, not WASM
+[target.x86_64-unknown-linux-gnu]
+rustflags = [
+    "-L", ".",
+    "-L", "/home/akash/Dev/ironsoft/iron-universal/Universal.PdfEditor/pdfium-workspace/Universal.Pdfium/out/linux-x64-shared",
+    "-C", "link-arg=-Wl,-rpath,/home/akash/Dev/ironsoft/iron-universal/Universal.PdfEditor/pdfium-workspace/Universal.Pdfium/out/linux-x64-shared"
+]
